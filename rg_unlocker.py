@@ -130,8 +130,8 @@ class App:
 
     def start_direct_download(self, url, window):
         parsed = urlparse(url)
-        if parsed.scheme != "https" or (parsed.hostname or "").lower() not in RAPIDGATOR_HOSTS:
-            messagebox.showerror("URL refusée", "Pour cette version, l’URL directe doit être en HTTPS sur rapidgator.net.")
+        if parsed.scheme not in ("https", "http") or not (parsed.hostname or "").lower().endswith("rapidgator.net"):
+            messagebox.showerror("URL refusée", "Pour cette version, l’URL doit être sur rapidgator.net.")
             return
         if self.busy:
             messagebox.showwarning("Téléchargement en cours", "Attendez la fin du téléchargement actuel.")
@@ -193,6 +193,24 @@ class App:
             self.root.after(0, self.progress_var.set, 100)
             self.root.after(0, self.status_var.set, f"Terminé : {path}")
             self.root.after(0, messagebox.showinfo, "Téléchargement terminé", f"Fichier enregistré :\\n{path}")
+        except urllib.error.URLError as exc:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            reason = getattr(exc, "reason", exc)
+            if isinstance(reason, ConnectionRefusedError) or "10061" in str(reason):
+                message = (
+                    "Connexion refusée par le serveur. Le lien collé est probablement une page Rapidgator, "
+                    "pas une URL directe de fichier, ou l’URL directe a expiré. "
+                    "Ouvre le lien dans le navigateur et suis les étapes Rapidgator. "
+                    "Cette application ne contourne pas l’attente, le CAPTCHA ou les restrictions de compte."
+                )
+            else:
+                message = f"Erreur réseau : {reason}"
+            self.root.after(0, self.status_var.set, f"Échec : {message}")
+            self.root.after(0, messagebox.showerror, "Téléchargement impossible", message)
         except Exception as exc:
             try:
                 if os.path.exists(temp_path):
